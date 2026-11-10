@@ -13,6 +13,7 @@ import { getOrganization, getOpportunity, listPod, toNotice, toProfile } from ".
 import { scoreFit } from "./scoring";
 import { clip, newId, safeBack, safeId, withNotice } from "./text";
 import type { PortalHit } from "./types";
+import { pdfText, safeMediaType } from "./documents";
 import { actor, requireSignedIn } from "./viewer";
 
 const FIELD_COLUMNS: Record<string, string> = {
@@ -176,16 +177,6 @@ export async function dismissSuggestion(formData: FormData) {
   redirect(withNotice(`/customers/${rows[0]?.organization_id ?? ""}`, "Suggestion dismissed."));
 }
 
-function pdfText(bytes: Buffer): string {
-  const raw = bytes.toString("latin1");
-  const parts: string[] = [];
-  for (const match of raw.match(/\((?:\\\)|\\\(|\\n|[^)]){4,}\)/g) ?? []) {
-    const inner = match.slice(1, -1).replace(/\\n/g, "\n").replace(/\\\)/g, ")").replace(/\\\(/g, "(");
-    if (/[A-Za-z]{3,}/.test(inner)) parts.push(inner);
-  }
-  return parts.join(" ").replace(/\s+/g, " ").trim();
-}
-
 export async function uploadDocument(formData: FormData) {
   await requireSignedIn();
   const orgValue = String(formData.get("org") ?? "");
@@ -206,7 +197,7 @@ export async function uploadDocument(formData: FormData) {
     }
     const bytes = Buffer.from(await file.arrayBuffer());
     filename = file.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 140) || filename;
-    mediaType = file.type || "application/octet-stream";
+    mediaType = safeMediaType(file.type);
     byteSize = bytes.length;
     base64 = bytes.toString("base64");
     if (!extracted) {
